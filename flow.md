@@ -34,7 +34,7 @@ sequenceDiagram
     participant Y as yt-dlp[default]<br/>(via uvx)
     participant N as node<br/>(JS challenge solver)
     participant YT as YouTube
-    participant W as mlx-whisper<br/>(via uvx)
+    participant W as whisper_run.py<br/>(mlx-whisper library, via uv run)
     participant F as ffmpeg
     participant HF as Hugging Face Hub
     participant FP as fill_prompt.fill()
@@ -51,7 +51,7 @@ sequenceDiagram
     N-->>Y: solved challenge
     YT-->>Y: title, channel, description, chapters, language
     Y-->>T: JSON on stdout
-    T->>T: write metadata.json<br/>language: "fr-FR" → "fr"<br/>glossary: title + channel + chapter titles
+    T->>T: write metadata.json<br/>language: "fr-FR" → "fr"<br/>glossary: deduplicated names/terms from title, channel, chapters, description
 
     Note over T,YT: 2/3 audio
     T->>Y: -f bestaudio -o <tempdir>/audio.%(ext)s -- <url>
@@ -68,19 +68,20 @@ sequenceDiagram
     end
 
     Note over T,HF: 3/3 transcription
-    T->>W: mlx_whisper <audio> --model whisper-large-v3-turbo<br/>--language --initial-prompt <glossary> --output-format json
+    T->>W: whisper_run.py <audio> <out dir>/transcript.json <glossary> <language>
     W->>F: ffmpeg -i <audio> -ac 1 -ar 16000 -f s16le -
     F-->>W: raw 16 kHz mono PCM
     opt first run only
         W->>HF: download mlx-community/whisper-large-v3-turbo (~1.6 GB)
         HF-->>W: weights, cached in ~/.cache/huggingface
     end
-    W->>W: run Whisper on MLX (Apple Silicon GPU), 30 s windows
-    W-->>T: audio.json (timestamped segments)
-    T->>T: move to transcript.json, delete temp dir (audio)
+    W->>W: run Whisper on MLX (Apple Silicon GPU), 30 s windows, seed 0<br/>window too repetitive (compression ratio > 2.4) → retry at 0.2 … 1.0<br/>retry above 0.5 drops carried-over text (breaks loops)
+    W-->>T: transcript.json (timestamped segments)
+    T->>T: delete temp dir (audio)
 
     T->>FP: fill(metadata, segments, focus)
-    FP->>FP: read prompt.md, escape data-block closing tags,<br/>single-pass {{placeholder}} substitution
+    FP->>FP: suspect_spans: compression ratio > 2.4 or 3+ identical segments in a row
+    FP->>FP: read prompt.md, escape data-block closing tags,<br/>single-pass {{placeholder}} substitution (incl. suspect spans)
     FP-->>T: filled prompt
     T->>T: write input.md
     T-->>C: "done: N segments, language=…"

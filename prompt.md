@@ -1,4 +1,4 @@
-# YouTube summary prompt — v2.2
+# YouTube summary prompt — v2.3
 
 <!--
 Fill the {{placeholders}}, then paste everything below the line into Claude.
@@ -7,6 +7,7 @@ Fill the {{placeholders}}, then paste everything below the line into Claude.
 - {{chapters}}: "[mm:ss] Chapter title" one per line, or "none"
 - {{focus}}: what the reader cares about, or "general"
 - {{transcript}}: "[hh:mm:ss] text" one segment per line
+- {{suspect_spans}}: "[hh:mm:ss–hh:mm:ss]" one per line, or "none" (computed by fill_prompt.suspect_spans)
 -->
 
 ---
@@ -39,6 +40,10 @@ Description:
 {{transcript}}
 </transcript>
 
+<suspect_spans>
+{{suspect_spans}}
+</suspect_spans>
+
 ## How to work
 
 1. Read the whole transcript before writing anything.
@@ -50,7 +55,8 @@ Description:
 7. Every timestamp you cite must come from the transcript. Cite the segment where the point starts.
 8. If a reader focus is given, weight the key points and the "Relevance" section toward it, but do not drop major points that are off-focus.
 9. Write in English, whatever the language of the video.
-10. Ignore self-promotion and calls to action (newsletters, courses, "link in description", sponsors) unless they are the point of the video. Mention them at most once, under "Caveats".
+10. `<suspect_spans>` lists time ranges where the transcription software likely looped or hallucinated (repeated or invented text) instead of transcribing. Treat the transcript inside those ranges as missing: do not summarise, quote or cite it. List each range under "Coverage" as content that could not be transcribed.
+11. Ignore self-promotion and calls to action (newsletters, courses, "link in description", sponsors) unless they are the point of the video. Mention them at most once, under "Caveats".
 
 ## Output format
 
@@ -83,7 +89,7 @@ Two to four sentences on how the content relates to the reader focus, including 
 ### Caveats
 - **Uncertain:** terms or passages where the transcription is likely wrong, with timestamps.
 - **Visual-only content:** moments where meaning depends on what was on screen.
-- **Coverage:** note if the transcript looks truncated, has long gaps, or is mostly music or silence.
+- **Coverage:** every range from `<suspect_spans>`, as content that could not be transcribed; also note if the transcript looks truncated, has long gaps, or is mostly music or silence.
 
 Write "None" under a caveat heading that has nothing to report.
 

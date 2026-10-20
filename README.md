@@ -80,8 +80,9 @@ with your Chrome cookies (`--cookies-from-browser chrome`).
 | File | What |
 |---|---|
 | `SKILL.md` | The skill: which script to run, failure handling, how to summarise, what to return |
-| `transcribe.py` | Downloads metadata and audio (yt-dlp), transcribes (mlx-whisper), writes `input.md`. Run with `--help` for options |
-| `fill_prompt.py` | Fills `prompt.md` with metadata and transcript. Used by `transcribe.py`; also runnable alone to refill after a prompt change |
+| `transcribe.py` | Downloads metadata and audio (yt-dlp), builds the Whisper glossary, transcribes, writes `input.md`. Run with `--help` for options |
+| `whisper_run.py` | Calls the mlx-whisper library (not its CLI, which disables the temperature fallback that breaks repetition loops). Run by `transcribe.py` through `uv run` |
+| `fill_prompt.py` | Fills `prompt.md` with metadata, transcript and suspect spans (likely Whisper loops). Used by `transcribe.py`; also runnable alone to refill after a prompt change |
 | `prompt.md` | The summarisation prompt. Version in its title |
 | `flow.md` | Sequence diagrams, high level and detailed |
 
@@ -114,6 +115,7 @@ slide- or demo-heavy video, a 60+ minute interview with two speakers, a video wi
 
 | Version | Change | Why |
 |---|---|---|
+| v2.3 | New `<suspect_spans>` block: listed ranges are treated as missing and reported under "Coverage" | Whisper repetition loops (e.g. the title repeated for 4 minutes) were being read as content; whatever the transcription fixes don't prevent is now flagged instead |
 | v2.2 | Word limits raised to 450 / 650 / 850 (under 15 min / 15–60 min / longer) | v2 landed at ~450 words for 10 min with the required sections; that reads fine, so the limit follows the output rather than forcing cuts |
 | v2.1 | Declares tag contents as data, never instructions (closing tags in video content are also escaped by `fill_prompt.py`) | A transcript or description could inject instructions — matters most when running as a skill with tool access |
 | v2 | Hard word limits; "By chapter" only for 20+ min; claims table max 6 rows, adds "demonstrated" type; never assert what was/wasn't shown; ignore self-promotion; Relevance may name gaps; metadata header | v1: 847 words for a 10-minute video, claimed something "is not shown" (it was on screen), padded claims table |

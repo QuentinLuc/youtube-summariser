@@ -25,10 +25,12 @@ Run with a Bash timeout of 10 minutes (transcription takes about 1/30 of the vid
 python3 "<skill dir>/transcribe.py" "<url>" "<output directory>" --focus "<focus>"
 ```
 
-It prints `done: N segments, language=…` and writes to the output directory:
+It prints `done: N segments, M suspect span(s), language=…` and writes to the output directory:
 - `metadata.json`: video metadata
 - `transcript.json`: the timestamped transcript
-- `input.md`: the summarisation instructions, filled with this video's metadata and transcript
+- `input.md`: the summarisation instructions, filled with this video's metadata, transcript and suspect spans
+
+Suspect spans are time ranges where Whisper likely looped or hallucinated (repeated phrases, "Thank you." over silence). They stay in the transcript with their timestamps; `input.md` lists them so the summary reports them as gaps instead of summarising them.
 
 ### 2. If step 1 fails
 
@@ -58,3 +60,4 @@ macOS on Apple Silicon (mlx-whisper), plus `uv`, `node` and `ffmpeg` on PATH. Ru
 | Fetching YouTube captions or the page instead of running the script | The script is the method: it works without captions and gives the timestamps the summary cites |
 | Default 2-minute Bash timeout kills transcription of long videos | Set the 10-minute timeout |
 | Summarising from memory or the video description when the script fails | Stop and report the error |
+| Summarising repeated text inside a suspect span | Treat it as missing and list the range under "Coverage", as `input.md` says |

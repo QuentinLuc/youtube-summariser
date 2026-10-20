@@ -9,23 +9,30 @@ Usage:
   python3 transcribe.py <url> <out_dir> [--focus TEXT] [--language CODE]
                         [--cookies-from-browser BROWSER]
 
-Needs uv (tools run through uvx, nothing installed globally), node (yt-dlp solves
+Needs uv (tools run through uv/uvx, nothing installed globally), node (yt-dlp solves
 YouTube's JS challenge with it) and ffmpeg on PATH (mlx-whisper decodes the audio with it).
 Audio is kept in a temporary directory and deleted afterwards.
 """
 import argparse
 import json
-import shutil
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from fill_prompt import fill
+from fill_prompt import fill, suspect_spans
 
-WHISPER_MODEL = "mlx-community/whisper-large-v3-turbo"
+HERE = Path(__file__).parent
 # Whisper only reads the last ~224 tokens of the initial prompt.
 GLOSSARY_MAX_CHARS = 600
+# Capitalised words that are not names or terms, even when they appear mid-title.
+GLOSSARY_STOPWORDS = {
+    "the", "a", "an", "and", "or", "of", "in", "on", "at", "to", "for", "with", "how", "what", "why",
+    "is", "are", "it", "its", "you", "your", "we", "our", "my", "i", "this", "that", "these", "learn",
+    "more", "here", "if", "when", "from", "by", "be", "can", "do", "does", "doesn't", "about", "as",
+    "but", "not", "no", "new", "who", "all", "same", "time", "hands", "meet", "compare",
+}
 
 
 def run(name: str, cmd: list[str]) -> subprocess.CompletedProcess:
@@ -54,10 +61,33 @@ def detect_language(meta: dict) -> str | None:
 
 
 def build_glossary(meta: dict) -> str:
-    # Names and terms Whisper is likely to mishear, taken from what the uploader wrote.
-    chapters = meta.get("chapters") or []
-    parts = [meta.get("title"), meta.get("channel"), *(c.get("title") for c in chapters)]
-    return ". ".join(p for p in parts if p)[:GLOSSARY_MAX_CHARS]
+    # Names and terms Whisper is likely to mishear, taken from what the uploader wrote, as a
+    # comma-separated list. Not sentences: a sentence at the head of the prompt (the title) is a
+    # phrase Whisper can latch onto and repeat instead of transcribing.
+    description = re.sub(r"https?://\S+", " ", meta.get("description") or "")
+    chunks = [meta.get("title") or "", meta.get("channel") or "",
+              *(c.get("title") or "" for c in meta.get("chapters") or []),
+              *re.split(r"[.!?:\n•→|–-]\s", description)]
+    seen, terms = set(), []
+    for chunk in chunks:
+        for i, word in enumerate(re.findall(r"[A-Za-z][\w'’]*[A-Za-z0-9]", chunk)):
+            inner_caps = any(ch.isupper() for ch in word[1:]) or any(ch.isdigit() for ch in word)  # IBM, LLMs, TypeSafe
+            mid_capital = i > 0 and word[0].isupper()  # capitalised, but not because it starts a chunk
+            rest = chunk[chunk.find(word) + len(word):].lstrip()
+            name_start = word[0].isupper() and rest[:1].isupper()  # "Martin Keen"
+            is_channel = chunk == meta.get("channel")
+            if not (inner_caps or mid_capital or name_start or is_channel):
+                continue
+            if word.lower() in GLOSSARY_STOPWORDS or word.lower() in seen:
+                continue
+            seen.add(word.lower())
+            terms.append(word)
+    glossary = ""
+    for term in terms:
+        if len(glossary) + len(term) + 2 > GLOSSARY_MAX_CHARS:
+            break
+        glossary = f"{glossary}, {term}" if glossary else term
+    return glossary
 
 
 def main() -> None:
@@ -86,21 +116,19 @@ def main() -> None:
         audio_path = audio_files[0]
 
         print("3/3 transcription")
-        whisper_cmd = [
-            "uvx", "--from", "mlx-whisper", "mlx_whisper", str(audio_path),
-            "--model", WHISPER_MODEL,
-            "--initial-prompt", build_glossary(meta),
-            "--output-format", "json", "--output-dir", str(tmp_dir), "--verbose", "False",
-        ]
         language = args.language or detect_language(meta)
-        if language:
-            whisper_cmd += ["--language", language]
-        run("mlx-whisper", whisper_cmd)
-        shutil.move(tmp_dir / "audio.json", args.out_dir / "transcript.json")
+        run("mlx-whisper", [
+            "uv", "run", "--quiet", "--no-project", "--with", "mlx-whisper",
+            "python", str(HERE / "whisper_run.py"),
+            str(audio_path), str(args.out_dir / "transcript.json"), build_glossary(meta),
+            *([language] if language else []),
+        ])
 
     segments = json.loads((args.out_dir / "transcript.json").read_text())["segments"]
     (args.out_dir / "input.md").write_text(fill(meta, segments, args.focus))
-    print(f"done: {len(segments)} segments, language={language or 'auto'} -> {args.out_dir}")
+    spans = suspect_spans(segments)
+    print(f"done: {len(segments)} segments, {len(spans)} suspect span(s), "
+          f"language={language or 'auto'} -> {args.out_dir}")
 
 
 if __name__ == "__main__":

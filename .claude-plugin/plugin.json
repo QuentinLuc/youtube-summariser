@@ -1,6 +1,6 @@
 {
   "name": "youtube-summary",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Summarise YouTube videos with or without captions: yt-dlp + local Whisper (MLX, Apple Silicon) + Claude",
   "author": {
     "name": "Quentin Luc"
