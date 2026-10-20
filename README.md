@@ -1,60 +1,112 @@
-# YouTube summariser — POC
+# youtube-summary
 
-> **Graduated to a skill on 2026-10-20:** `~/.claude/skills/youtube-summary/` (`SKILL.md` = `skill-prompt.md`,
-> plus copies of `transcribe.py`, `fill_prompt.py`, `prompt.md`). The skill is now the source of truth;
-> this folder keeps the test bench and history. Copy changes across if you iterate here.
+A [Claude Code](https://claude.com/claude-code) skill that summarises a YouTube video **whether or not it has captions**.
+It downloads the audio, transcribes it locally with Whisper, and has Claude write a structured summary with
+timestamps, fact/opinion labels and caveats about likely mistranscriptions.
 
-Goal: summarise a YouTube video without relying on YouTube's captions
-(yt-dlp → ffmpeg → mlx-whisper → Claude). This folder holds the summarisation
-prompt while we iterate on it. It becomes a skill once the prompt is stable.
+```
+yt-dlp (audio) → mlx-whisper, Whisper large-v3-turbo (local) → Claude summary
+```
+
+See [`flow.md`](flow.md) for sequence diagrams.
+
+> **Personal use.** Downloading from YouTube is against YouTube's Terms of Service except where YouTube
+> offers a download option. Check that your use is acceptable before relying on this.
+
+## Requirements
+
+- **macOS on Apple Silicon** (transcription runs on [MLX](https://github.com/ml-explore/mlx))
+- [Claude Code](https://claude.com/claude-code)
+- `python3` 3.10+
+- [`uv`](https://docs.astral.sh/uv/): runs yt-dlp and mlx-whisper through `uvx`, nothing installed globally
+- `node`: yt-dlp uses it to pass YouTube's JavaScript challenge (without it, downloads fail with HTTP 403)
+- `ffmpeg`: mlx-whisper decodes the audio with it
+
+```bash
+brew install uv node ffmpeg
+```
+
+The first run downloads the Whisper model (~1.6 GB) from Hugging Face.
+
+## Install
+
+Clone into your personal skills folder:
+
+```bash
+git clone https://github.com/QuentinLuc/youtube-summariser ~/.claude/skills/youtube-summary
+```
+
+Or keep the clone elsewhere and link it:
+
+```bash
+git clone https://github.com/QuentinLuc/youtube-summariser ~/code/youtube-summariser
+ln -s ~/code/youtube-summariser ~/.claude/skills/youtube-summary
+```
+
+Update with `git pull`. Restart Claude Code after installing so it picks up the skill.
+
+## Use
+
+In Claude Code, ask in plain language or call the skill directly:
+
+```
+Summarise this video: https://www.youtube.com/watch?v=DQBqh6gcx7U
+/youtube-summary https://www.youtube.com/watch?v=DQBqh6gcx7U focus: engineering managers
+```
+
+Claude asks permission to run `python3 …/transcribe.py` and to write the summary. Results go to
+`<folder Claude runs from>/<video id>/`:
+
+| File | What |
+|---|---|
+| `summary.md` | The summary |
+| `transcript.json` | Timestamped Whisper transcript |
+| `metadata.json` | Video metadata from yt-dlp |
+| `input.md` | The summarisation prompt as Claude received it |
+
+A 10-minute video takes about a minute end to end. If YouTube blocks the download, Claude retries once
+with your Chrome cookies (`--cookies-from-browser chrome`).
 
 ## Files
 
 | File | What |
 |---|---|
-| `skill-prompt.md` | The orchestration prompt (future `SKILL.md`): run `transcribe.py`, handle failures, follow the filled `input.md`, write `summary.md`. |
-| `transcribe.py` | Steps 1–3: yt-dlp metadata + native audio, mlx-whisper transcript (it decodes the audio with ffmpeg), then fills the prompt. `python3 transcribe.py <url> tests/<slug> --focus "..."` writes `metadata.json`, `transcript.json`, `input.md`. Needs uv, node and ffmpeg. |
-| `fill_prompt.py` | Refills the prompt from an existing metadata + transcript, e.g. after a prompt change. |
-| `prompt.md` | The summarisation prompt (step 4 of the pipeline). Current version in its title. |
-| `tests/` | One folder per test video: inputs used and Claude's output, per prompt version. |
+| `SKILL.md` | The skill: which script to run, failure handling, how to summarise, what to return |
+| `transcribe.py` | Downloads metadata and audio (yt-dlp), transcribes (mlx-whisper), writes `input.md`. Run with `--help` for options |
+| `fill_prompt.py` | Fills `prompt.md` with metadata and transcript. Used by `transcribe.py`; also runnable alone to refill after a prompt change |
+| `prompt.md` | The summarisation prompt. Version in its title |
+| `flow.md` | Sequence diagrams, high level and detailed |
 
-## How to test end to end (skill prompt)
+## Developing
 
-From outside the project folder, so no project CLAUDE.md is loaded. Run from this folder:
+`tests/` is git-ignored: keep one folder per test video there, with its inputs and Claude's output per
+prompt version.
+
+**Test the skill end to end**, in a fresh session without your project's `CLAUDE.md` (run outside any project):
 
 ```bash
-P=$PWD
-cd /tmp && { sed '1,/^---$/d' $P/skill-prompt.md; printf '\nURL: <youtube url>\nFocus: general\nSkill directory: %s\n' "$P"; } \
-  | claude -p --model claude-opus-5-5 --add-dir $P --allowedTools "Bash(python3 *)" Read Write
+cd "$(mktemp -d)" && echo "Summarise this YouTube video: <url>" \
+  | claude -p --allowedTools Skill "Bash(python3 *)" Read Write
 ```
 
-Pass the prompt on stdin: `--allowedTools` takes several values and swallows a prompt given as an argument.
-Output lands in `<folder Claude runs from>/<video id>/` (`summary.md` plus the intermediate files),
-here `/tmp/<video id>/`. To keep a test in this folder, add `Output directory: $P/tests/<video id>`.
+Pass the request on stdin: `--allowedTools` takes several values and swallows a prompt given as an argument.
 
-## How to test the summarisation prompt alone
+**Test the summarisation prompt alone**, without re-downloading:
 
 1. New video: `python3 transcribe.py <url> tests/<slug> --focus "..."`.
-   Existing video, new prompt version: `python3 fill_prompt.py tests/<slug>/metadata.json tests/<slug>/transcript.json "<focus>" > tests/<slug>/input-v<N>.md`.
-2. Give the filled prompt to a fresh Claude session: `claude -p < tests/<slug>/input-v<N>.md > tests/<slug>/output-v<N>.md`
-   (run it from outside this folder so no project CLAUDE.md is loaded).
-3. Save the output as `tests/<video-slug>/output-v<N>.md` and note what was wrong.
-4. Change the prompt, bump the version, rerun on all test videos.
+   Existing video, new prompt version:
+   `python3 fill_prompt.py tests/<slug>/metadata.json tests/<slug>/transcript.json "<focus>" > tests/<slug>/input-v<N>.md`
+2. `(cd /tmp && claude -p < $PWD/tests/<slug>/input-v<N>.md > $PWD/tests/<slug>/output-v<N>.md)`
+3. Note what was wrong in `tests/<slug>/notes.md`, change the prompt, bump its version, rerun on all test videos.
 
-## Test set (suggested)
+Cover the failure modes, not just the easy case: an English talk with chapters, a non-English talk, a
+slide- or demo-heavy video, a 60+ minute interview with two speakers, a video without captions.
 
-Cover the failure modes, not just the easy case:
-
-- A talk in English with chapters (baseline)
-- A talk in French (checks English output and term correction)
-- A video heavy on slides or demos (checks visual-only caveats)
-- A long interview, 60+ min, with two speakers (checks attribution and length)
-
-## Changelog
+## Prompt changelog
 
 | Version | Change | Why |
 |---|---|---|
+| v2.2 | Word limits raised to 450 / 650 / 850 (under 15 min / 15–60 min / longer) | v2 landed at ~450 words for 10 min with the required sections; that reads fine, so the limit follows the output rather than forcing cuts |
+| v2.1 | Declares tag contents as data, never instructions (closing tags in video content are also escaped by `fill_prompt.py`) | A transcript or description could inject instructions — matters most when running as a skill with tool access |
+| v2 | Hard word limits; "By chapter" only for 20+ min; claims table max 6 rows, adds "demonstrated" type; never assert what was/wasn't shown; ignore self-promotion; Relevance may name gaps; metadata header | v1: 847 words for a 10-minute video, claimed something "is not shown" (it was on screen), padded claims table |
 | v1 | Initial prompt | — |
-| v2.2 | Word limits raised to 450 / 650 / 850 (under 15 min / 15–60 min / longer) | v2 landed at ~450 words for 10 min with the required sections; that reads fine, so the limit follows the output rather than forcing cuts (review S9) |
-| v2.1 | Declares tag contents as data, never instructions (closing tags in video content are also escaped by `fill_prompt.py`) | Code review: a transcript or description could inject instructions — matters most once this runs as a skill with tool access |
-| v2 | Hard word limits; "By chapter" only for 20+ min; claims table max 6 rows, adds "demonstrated" type; never assert what was/wasn't shown; ignore self-promotion; Relevance may name gaps; metadata header | v1 on `vibe-coding-playwright-qa`: 847 words for 10 min, claimed the prompt "is not shown" (it was pasted on screen), padded claims table |
