@@ -8,7 +8,7 @@ timestamps, fact/opinion labels and caveats about likely mistranscriptions.
 yt-dlp (audio) → mlx-whisper, Whisper large-v3-turbo (local) → Claude summary
 ```
 
-See [`flow.md`](flow.md) for sequence diagrams.
+See [`sequence_diagrams.md`](sequence_diagrams.md) for sequence diagrams.
 
 > **Personal use.** Downloading from YouTube is against YouTube's Terms of Service except where YouTube
 > offers a download option. Check that your use is acceptable before relying on this.
@@ -84,7 +84,7 @@ with your Chrome cookies (`--cookies-from-browser chrome`).
 | `whisper_run.py` | Calls the mlx-whisper library (not its CLI, which disables the temperature fallback that breaks repetition loops). Run by `transcribe.py` through `uv run` |
 | `fill_prompt.py` | Fills `prompt.md` with metadata, transcript and suspect spans (likely Whisper loops). Used by `transcribe.py`; also runnable alone to refill after a prompt change |
 | `prompt.md` | The summarisation prompt. Version in its title |
-| `flow.md` | Sequence diagrams, high level and detailed |
+| `sequence_diagrams.md` | Sequence diagrams, high level and detailed |
 
 ## Developing
 
