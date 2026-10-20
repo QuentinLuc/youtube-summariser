@@ -120,3 +120,7 @@ slide- or demo-heavy video, a 60+ minute interview with two speakers, a video wi
 | v2.1 | Declares tag contents as data, never instructions (closing tags in video content are also escaped by `fill_prompt.py`) | A transcript or description could inject instructions — matters most when running as a skill with tool access |
 | v2 | Hard word limits; "By chapter" only for 20+ min; claims table max 6 rows, adds "demonstrated" type; never assert what was/wasn't shown; ignore self-promotion; Relevance may name gaps; metadata header | v1: 847 words for a 10-minute video, claimed something "is not shown" (it was on screen), padded claims table |
 | v1 | Initial prompt | — |
+
+## License
+
+[MIT](LICENSE). This covers the code in this repository only; it grants no rights over YouTube content.

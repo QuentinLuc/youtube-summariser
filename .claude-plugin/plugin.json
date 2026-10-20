@@ -6,5 +6,8 @@
     "name": "Quentin Luc"
   },
   "repository": "https://github.com/QuentinLuc/youtube-summariser",
-  "skills": ["./"]
+  "license": "MIT",
+  "skills": [
+    "./"
+  ]
 }
