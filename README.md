@@ -30,20 +30,28 @@ The first run downloads the Whisper model (~1.6 GB) from Hugging Face.
 
 ## Install
 
-Clone into your personal skills folder:
+**As a plugin (recommended).** In Claude Code:
+
+```
+/plugin install youtube-summary --marketplace QuentinLuc/youtube-summariser
+```
+
+On Claude Code versions without `--marketplace`, add the marketplace first:
+
+```
+/plugin marketplace add QuentinLuc/youtube-summariser
+/plugin install youtube-summary@quentinluc
+```
+
+Claude Code handles updates. The skill is then invoked as `/youtube-summary:youtube-summary`, or by asking in plain language.
+
+**As a personal skill.** Clone into your skills folder (invoked as `/youtube-summary`), update with `git pull`:
 
 ```bash
 git clone https://github.com/QuentinLuc/youtube-summariser ~/.claude/skills/youtube-summary
 ```
 
-Or keep the clone elsewhere and link it:
-
-```bash
-git clone https://github.com/QuentinLuc/youtube-summariser ~/code/youtube-summariser
-ln -s ~/code/youtube-summariser ~/.claude/skills/youtube-summary
-```
-
-Update with `git pull`. Restart Claude Code after installing so it picks up the skill.
+Install one way or the other, not both, or the skill appears twice. Restart Claude Code after installing.
 
 ## Use
 

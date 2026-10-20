@@ -1,0 +1,14 @@
+{
+  "name": "quentinluc",
+  "description": "Claude Code plugins by Quentin Luc",
+  "owner": {
+    "name": "Quentin Luc"
+  },
+  "plugins": [
+    {
+      "name": "youtube-summary",
+      "source": "./",
+      "description": "Summarise YouTube videos with or without captions: yt-dlp + local Whisper (MLX, Apple Silicon) + Claude"
+    }
+  ]
+}
